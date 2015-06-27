@@ -1,6 +1,6 @@
 ---
 title: "HelloWorld"
-author: "Mark Meehan"
+author: "Mark O. Meehan"
 date: "June 26, 2015"
 output: html_document
 ---
