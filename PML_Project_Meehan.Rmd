@@ -1,0 +1,110 @@
+---
+output: html_document
+---
+#Practical Machine Learning Project File (resubmittal)
+##Author: Mark Meehan
+##Date: 3 March 2016
+
+#Executive Summary
+
+Using the exercise data (one training file and one testing file) we will use various predictive models to measure accuracy and errors. 
+
+#Project assignment
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. 
+
+###Load the data
+```{r}
+#load the training and testing datasets:
+data <- read.csv("~/Documents/PML Project Files/pml-training.csv")
+testData <- read.csv("~/Documents/PML Project Files/pml-testing.csv")
+```
+###Take a first look at the data
+###Uncomment these if you want to take a look - 
+```{r}
+#head(training)
+#head(testing)
+#tail(training)
+#tail(testing)
+#str(training)
+#str(testing)
+#summary(training)
+#summary(testing)
+```
+Divide the training csv file into a training and test set to do the development on. Also, we'll load the libraries we'll be using during this analysis and use set.seed() for consistency  
+
+```{r}
+library(caret)
+library(randomForest)
+
+set.seed(1958)  #Set the random seed so that repeated uses results in the same output
+
+#Create a training set with .70 percent of the original data and then a testing set with the 
+#remaining data
+
+train <- createDataPartition(y=data$classe,p=.70,list=F)
+training <- data[train,]
+testing <- data[-train,]
+
+#Remove the first 7 columns as they are not needed - this is the first cleaning step. This same #approach will be used on the test set extracted from the pml-training.csv as well as the #pml-testing.csv. This will leave us with 153 variables. 
+
+trainingClean <- training[ ,8:160]
+
+#First convert blanks to NA and then remove those variables with over .95 percent NA values. This will leave us with 53 variables. In other words - 100 variables contained over .95 percent of NAs. Wow. 
+
+trainingClean[trainingClean==""] <- NA
+NAamt <- apply(trainingClean, 2, function(x) sum(is.na(x)))/nrow(trainingClean)
+trainingClean <- trainingClean[!(NAamt>0.95)]
+
+```
+Now we'll use Principle Component Analysis - first understand the number of components required to reach the accuracy numbers indicated in each of the three analyses - I'll pick 25 components to end up with a high accuracy.
+
+```{r}
+preProc <- preProcess(trainingClean[,1:52],method="pca",thresh=.85) 
+preProc$numComp
+preProc <- preProcess(trainingClean[,1:52],method="pca",thresh=.9)  
+preProc$numComp
+preProc <- preProcess(trainingClean[,1:52],method="pca",thresh=.95) 
+preProc$numComp
+#Running the above preprocessing for PCA we end up with 15 components for .85 accuracy, 18 for .9 and 25 for .95 - we'll go for the most acccuracy and use 25 components for the PCA
+
+preProc <- preProcess(trainingClean[,1:52],method="pca",pcaComp=25) 
+preProc$rotation
+ 
+trainingPCA <- predict(preProc,trainingClean[,1:52])
+#Create the random forest model using our data from the PCA analysis above. 
+
+modFitRF <- randomForest(trainingClean$classe ~ .,   data=trainingPCA, do.trace=F)
+
+#take a look at the model - the classifier error rates look pretty good
+
+print(modFitRF)
+```
+Now that we have one model and understand the accurace we'll clean the testing data much like we did earlier. This cleaning process is exactly as we did earlier. 
+```{r}
+testingClean <- testing[ ,8:160]
+testingClean[testingClean==""] <- NA
+NAamt <- apply(testingClean, 2, function(x) sum(is.na(x)))/nrow(testingClean)
+testingClean <- testingClean[!(NAamt>0.95)]
+testingPCA <- predict(preProc,testingClean[,1:52])
+
+#Now examine the resulting confusion matrix when using the pure test data. The results look even better than when using the test data we culled from the training data. 
+
+confusionMatrix(testingClean$classe,predict(modFitRF,testingPCA))
+```
+
+Finally, we can use the completed untouched training data we read in at the beginning of this program and see how are predictions look on the test data!
+
+```{r}
+testDataClean <- testData[ ,8:160]
+testDataClean[testDataClean==""] <- NA
+NAamt <- apply(testDataClean, 2, function(x) sum(is.na(x)))/nrow(testDataClean)
+testDataClean <- testDataClean[!(NAamt>0.95)]
+testDataPCA <- predict(preProc,testDataClean[,1:52])
+testDataClean$classe <- predict(modFitRF,testDataPCA)
+
+#Here are the 20 predictions
+testDataClean[ ,"classe"]
+
+```
+
+Conclusion - the selection of a subset of variables needs to be checked as was done here. I conclude that assuming acceleration was somehow equivalent to measuring (and therefore classifying) correct exercise movement was incorrect. Great negative lesson using the procedures learned during this class. 
